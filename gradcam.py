@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
 import tensorflow as tf
@@ -30,27 +31,50 @@ class GradCam():
         return gradients
 
 
-    def weights(self):
-
-        logits=model.get_layer('conv2d_6').output[:,:,:,0]
-        logits_ij=logits*self.pixels
-        fmap=model.get_layer('conv2d_18').output 
-        g = self.gradients(logits_ij, fmap)
+    def weights(self, image):
         
-        return g
+        image=tf.expand_dims(image, axis=0)
+        logits=model.get_layer('conv2d_6').output[:,:,:,self._class]
+        #logits_ij=logits*self.pixels
+        fmap=model.get_layer('conv2d_18').output 
+        g = self.gradients(logits, fmap)
+
+        gfunction=K.function([self.model.input],[logits,fmap])   
+        x, grads=gfunction([image])
+
+        
+        return x,grads
 
 
     def weightedMap(self):
-        pass
+        self.alpha=tf.mean(self.grads)
+        self.alpha=abs(self.alpha)
+        return self.alpha
+
+    
+    def activationMaps():
+
+        cam=tf.dot(self.A, self.alpha_c)
+        return cam
+
+
+
+    def sgd(self, image):
+
+        weights=self.weights(image)
+        return weights
+        
 
 
 
 
 
+
+image=cv2.imread('48.90239 C L1.3.png')
 model=load_model('unet_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_17_40.h5')
-gc = GradCam()
+gc = GradCam(model=model)
 
-grad=gc.weights()
+grad=gc.weights(image)
 
 print(grad)
 
