@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import Model, load_model
 import tensorflow as tf
+from tensorflow.keras import Input
 import tensorflow.keras.backend as K
 
 tf.config.experimental_run_functions_eagerly(True)
@@ -10,13 +11,13 @@ tf.config.experimental_run_functions_eagerly(True)
 class GradCam():
 
     def __init__(self, _class=None,  pixels=None, fMaps=None, model=None, 
-            layer=None, lastlayer=None):
+            conv_name=None, final_conv_name=None):
+        
 
         self.pixels=None
-        self.fMaps=None
+        self.conv_name=conv_name
+        self.final_conv_name=final_conv_name
         self.model=model
-        self.layer=layer
-        self._lastlayer=lastlayer
         self._class=_class
 
 
@@ -25,25 +26,31 @@ class GradCam():
         return model.layers[-1].name
 
 
-    def gradients(self, logits, fmap):
-        with tf.GradientTape() as tape:
-            gradients=tape.gradient(logits,fmap)
-        return gradients
-
-
     def weights(self, image):
         
         image=tf.expand_dims(image, axis=0)
-        logits=model.get_layer('conv2d_6').output[:,:,:,self._class]
-        #logits_ij=logits*self.pixels
-        fmap=model.get_layer('conv2d_18').output 
-        g = self.gradients(logits, fmap)
 
-        gfunction=K.function([self.model.input],[logits,fmap])   
-        x, grads=gfunction([image])
+        conv_layer=model.get_layer(self.conv_name)
+        conv_model=Model(self.model.input,conv_layer.output)
+       
+        final_input=Input(shape=conv_layer.output.shape)
+        final_conv_layer=self.model.get_layer(self.final_conv_name)(final_input)
+        final_conv_model=Model(final_input, final_conv_layer.output)
 
+        with tf.GradientTape() as tape:
+            final_conv_output=final_conv_model(image)
+            tape.watch(final_conv_output)
+            preds=final_conv_model(final_conv_output)
+            gradients=tape.gradient(preds,final_conv_output)
         
-        return x,grads
+        return gradients
+
+
+    def weights2(self, image):
+
+        image=tf.expand_dims(image,axis=0)
+        conv_layer=model.get_layer(self.conv_name)
+
 
 
     def weightedMap(self):
@@ -59,6 +66,9 @@ class GradCam():
 
 
 
+
+
+
     def sgd(self, image):
 
         weights=self.weights(image)
@@ -67,12 +77,10 @@ class GradCam():
 
 
 
-
-
-
 image=cv2.imread('48.90239 C L1.3.png')
 model=load_model('unet_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_17_40.h5')
-gc = GradCam(model=model)
+print(model.inputs)
+gc = GradCam(model=model, final_conv_name='conv2d_18', conv_name='conv2d_9')
 
 grad=gc.weights(image)
 
