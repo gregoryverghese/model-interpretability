@@ -18,7 +18,9 @@ class GradCam():
         self.conv_name=conv_name
         self.final_conv_name=final_conv_name
         self.model=model
-        self._class=_class
+        self._class=0
+        self._alpha=None
+        self._A=None
 
 
     @property
@@ -26,65 +28,52 @@ class GradCam():
         return model.layers[-1].name
 
 
-    def weights(self, image):
-        
-        image=tf.expand_dims(image, axis=0)
-
-        conv_layer=model.get_layer(self.conv_name)
-        conv_model=Model(self.model.input,conv_layer.output)
-       
-        final_input=Input(shape=conv_layer.output.shape)
-        final_conv_layer=self.model.get_layer(self.final_conv_name)(final_input)
-        final_conv_model=Model(final_input, final_conv_layer.output)
+    def calculate_alpha(self, image):
 
         with tf.GradientTape() as tape:
-            final_conv_output=final_conv_model(image)
-            tape.watch(final_conv_output)
-            preds=final_conv_model(final_conv_output)
-            gradients=tape.gradient(preds,final_conv_output)
+            image=tf.expand_dims(image,axis=0)
+            conv_layer=model.get_layer(self.conv_name)
+            A_k=conv_layer.output
+
+            final_conv_layer=self.model.get_layer(self.final_conv_name)
+            y=final_conv_layer.output
         
-        return gradients
+            gModel=Model([self.model.inputs], [A_k,y])
+            
+            convOutput, pred=gModel(image)
+            y_c=pred[...,-1]
+            grads = tape.gradient(y_c,convOutput)
 
+        self.alpha=np.mean(grads, axis=(0,1,2))
+        self._A=convOutput
+        
 
-    def weights2(self, image):
-
-        image=tf.expand_dims(image,axis=0)
-        conv_layer=model.get_layer(self.conv_name)
-
-
-
-    def weightedMap(self):
-        self.alpha=tf.mean(self.grads)
-        self.alpha=abs(self.alpha)
-        return self.alpha
-
+    def gradcam(self, image):
+        
+        self.calculate_alpha(image)
+        cam=np.dot(self._A, self.alpha)
+        #cam=cam*(cam>0)
+        cam=np.maximum(cam,0)
+        x,y,_=image.shape
+        cam=cv2.resize(cam,(x,y))
     
-    def activationMaps():
-
-        cam=tf.dot(self.A, self.alpha_c)
         return cam
 
 
 
 
-
-
-    def sgd(self, image):
-
-        weights=self.weights(image)
-        return weights
-        
-
-
-
-image=cv2.imread('48.90239 C L1.3.png')
+image=cv2.imread('100042_01_LR_101536_62016.png')
 model=load_model('unet_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_17_40.h5')
-print(model.inputs)
-gc = GradCam(model=model, final_conv_name='conv2d_18', conv_name='conv2d_9')
 
-grad=gc.weights(image)
+layer=model.layers[-1].name
+gc = GradCam(model=model, final_conv_name=layer, conv_name='conv2d_9')
 
-print(grad)
+#grad=gc.calculate_alpha(image)
+cam=gc.gradcam(image)
+
+
+
+#print(grad)
 
 
 
