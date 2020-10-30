@@ -62,6 +62,8 @@ class GradCam():
             self.A, prediction = grad_model(image)
             self.y_c = prediction[...,self._class]
 
+            print('y shape', self.y_c.shape)
+
             grads = tape.gradient(self.y_c, self.A)
 
         return grads
