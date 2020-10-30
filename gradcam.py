@@ -8,7 +8,7 @@ import tensorflow.keras.backend as K
 
 class GradCam():
 
-    def __init__(self, model, convlayer_name, _class=0,  pixels=None):
+    def __init__(self, model, convlayer_name, _class=0,  pixels=1):
         
         self.model=model
         self.pixels=pixels
@@ -20,8 +20,7 @@ class GradCam():
 
 
     @property
-    def finallayer(self):
-        
+    def finallayer(self):        
         return self.model.layers[-1]
         
 
@@ -56,11 +55,14 @@ class GradCam():
 
         inputs=[self.model.inputs]
         outputs=[self.convlayer.output,self.finallayer.output]
+
         grad_model=Model(inputs, outputs)
 
         with tf.GradientTape() as tape:
             self.A, prediction = grad_model(image)
-            self.y_c = prediction[...,self._class]
+            print(prediction.shape)
+            self.y_c = prediction[...,self._class]*pixels
+            
 
             grads = tape.gradient(self.y_c, self.A)
 
@@ -71,6 +73,7 @@ class GradCam():
         
         grads = self.gradients(image)
         self.alphas = tf.reduce_mean(grads, axis=(0,1,2))
+        self.alphas = tf.maximum(self.alphas,0)
 
         return self.alphas
 
@@ -78,10 +81,11 @@ class GradCam():
     def gradcam(self, image):
         
         self.calculate_alphas(image)
-        cam=np.dot(self.A[0,:,:,:], self.alphas)
+        cam=tf.multiply(self.A[0,:,:,:],self.alphas)
+        cam=tf.reduce_sum(cam, axis=-1)
 
-        cam=np.maximum(cam,0)
-        x,y,_=image.shape
+        cam=np.maximum(cam,0)/np.max(cam)   
+        x,y,_ = image.shape
         cam=cv2.resize(cam,(x,y))
 
         return cam
@@ -95,20 +99,19 @@ class GradCam():
         return heatmap,output
 
 
+
+'''
 image=cv2.imread('14.90610 C L2.11.png')
-model=load_model('attention_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_data_256_32_17_39.h5')
-gc = GradCam(model=model, convlayer_name='conv2d_140')
+model=load_model('unet_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_data_256_32_16_40.h5')
 
-
+gc = GradCam(model=model, convlayer_name='conv2d_66')
 cam=gc.gradcam(image)
 cam=(cam*255).astype(np.uint8)
-
-print(cam.shape)
-
-
-
 test=gc.heatmap(cam, image)
 cv2.imwrite('test.png', test[0])
 cv2.imwrite('test1.png', test[1])
 
 
+for l in model.layers:
+    print(l.name)
+'''
