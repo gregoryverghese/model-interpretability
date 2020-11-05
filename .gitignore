@@ -1,2 +1,5 @@
 *.png
 *.h5
+*.DS_Store
+*.swp
+*data
