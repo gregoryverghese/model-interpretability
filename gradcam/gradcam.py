@@ -61,7 +61,7 @@ class GradCam():
         with tf.GradientTape() as tape:
             self.A, prediction = grad_model(image)
             print(prediction.shape)
-            self.y_c = prediction[...,self._class]*pixels
+            self.y_c = prediction[...,self._class]
             
 
             grads = tape.gradient(self.y_c, self.A)
@@ -100,7 +100,7 @@ class GradCam():
 
 
 
-'''
+
 image=cv2.imread('14.90610 C L2.11.png')
 model=load_model('unet_germ_2.5x_adam_weightedBinaryCrossEntropy_FRC_data_256_32_16_40.h5')
 
@@ -110,7 +110,7 @@ cam=(cam*255).astype(np.uint8)
 test=gc.heatmap(cam, image)
 cv2.imwrite('test.png', test[0])
 cv2.imwrite('test1.png', test[1])
-
+'''
 
 for l in model.layers:
     print(l.name)
